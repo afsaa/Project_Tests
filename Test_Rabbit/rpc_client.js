@@ -1,12 +1,16 @@
 var amqp = require("amqplib/callback_api");
 
+// Objeto para almacenar las canciones mas adelante.
+var songsObj;
+
 // Colas Persistentes
 var q_conexion = "conectoMesa";
 var q_votos = "atencionMesas"; //A esta cola se envía el mensaje para votar con los datos Ej. "codSitio,Mio Cid"
 
 // Colas Temporales
 var q_canciones = "canciones";
-var q_test = makeid();
+var qSongsReceiver = makeid();
+var qVotesReceiver = makeid();
 
 function makeid() {
   var text = "";
@@ -24,9 +28,9 @@ function bail(err) {
   process.exit(1);
 }
 
-function createNewQueue(conn) {
+function createNewQueue(conn, newQueue) {
   conn.createChannel(function(err, ch) {
-    ch.assertQueue(q_test, { exclusive: true }, function(err, q) {
+    ch.assertQueue(newQueue, { exclusive: true }, function(err, q) {
       console.log(" [*] New queue %s created", q.queue);
     });
   });
@@ -64,10 +68,10 @@ function persistentQueueOperations(conn, receiverQueue) {
   }
 }
 
-function temporalQueueOperations(conn, receiverQueue) {
+function temporalQueueOperations(conn, messageReceiverQueue, dataReceiverQueue) {
   var ok = conn.createChannel(on_open);
   function on_open(err, ch) {
-    var q1 = createNewQueue(conn);
+    createNewQueue(conn, dataReceiverQueue);
     if (err != null) bail(err);
     // Creamos la cola temporal "q" la cual contendrá la respuesta para el sitio.
     ch.assertQueue("", { exclusive: true }, function(err, q) {
@@ -75,11 +79,18 @@ function temporalQueueOperations(conn, receiverQueue) {
         " [*] Waiting for messages in %s. To exit press CTRL+C",
         q.queue
       );
-      // Enviamos la información a la cola indicada y pedimos que se nos responda a "q.queue".
-      ch.sendToQueue(receiverQueue, new Buffer("wZ0Key" + "," + q_test), {
-        replyTo: q.queue
-      });
-      console.log(q.queue, q_test);
+      // Enviamos la información a la cola indicada.
+      if (dataReceiverQueue === qSongsReceiver) {
+        ch.sendToQueue(messageReceiverQueue, new Buffer("hC7jHb" + "," + dataReceiverQueue), {
+          replyTo: q.queue
+        });
+        console.log("Message Receiver Queue -> " + q.queue, "Songs Receiver Queue -> " + dataReceiverQueue);
+      } else {
+        // ch.sendToQueue(messageReceiverQueue, new Buffer("Wlxchu" + "," + songsObj.tittle), {
+        //   replyTo: q.queue
+        // });
+        // console.log("Message Receiver Queue -> " + q.queue, "Song Voted -> " + songsObj.tittle);
+      }
       // Consumimos los datos recibidos para administrarlos.
       ch.consume(q.queue, function(msg) {
         if (msg !== null) {
@@ -89,23 +100,30 @@ function temporalQueueOperations(conn, receiverQueue) {
           //console.log(obj);
         }
       });
-      // Consumimos la cola en la cual se reciben las canciones.
-      ch.consume(q_test, function(msg) {
-        if (msg !== null) {
-          msg = msg.content.toString();
-          //console.log(msg);
-          msg = msg.split("|||");
-          console.log(msg[0]);
-          var song1 = JSON.parse(msg[0]);
-          //var song2 = JSON.parse(msg[1]);
-          //var song3 = JSON.parse(msg[2]);
-          //console.log(msg);
-          console.log(song1);
-        } else {
-          console.log("Message Error...");
-        }
-      });
+      // Consumimos la cola en la cual se reciben las canciones o los votos.
+      if (dataReceiverQueue === qSongsReceiver) {
+        ch.consume(dataReceiverQueue, function(msg) {
+          if (msg !== null) {
+            msg = msg.content.toString();
+            //console.log(msg);
+            msg = msg.split("|||");
+            //console.log(msg[0]);
+            var song1 = JSON.parse(msg[0]);
+            var song2 = JSON.parse(msg[1]);
+            var song3 = JSON.parse(msg[2]);
+            //console.log(msg);
+            console.log(song1[Object.keys(song1)[0]].genre);
+            // console.log(Object.keys(song2)[0]);
+            // console.log(Object.keys(song3)[0]);
+          } else {
+            console.log("Troubles receiving the songs...");
+          }
+        });
+      }else {
+
+      }
     });
+    //temporalQueueOperations(conn, q_votos, qVotesReceiver);
   }
 }
 
@@ -117,6 +135,6 @@ amqp.connect(
     //persistentQueueOperations(conn, q_conexion);
     //persistentQueueOperations(conn, q_votos);
     // Recibimos la respuesta del servidor por medio de las colas temporales.
-    temporalQueueOperations(conn, q_conexion);
+    temporalQueueOperations(conn, q_conexion, qSongsReceiver);
   }
 );
