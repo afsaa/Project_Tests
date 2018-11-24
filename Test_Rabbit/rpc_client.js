@@ -3,6 +3,8 @@ var amqp = require("amqplib/callback_api");
 // Objeto para almacenar las canciones mas adelante.
 var songsObj;
 
+var songsList;
+
 // Colas Persistentes
 var q_conexion = "conectoMesa";
 var q_votos = "atencionMesas"; //A esta cola se envía el mensaje para votar con los datos Ej. "codSitio,Mio Cid"
@@ -68,7 +70,11 @@ function persistentQueueOperations(conn, receiverQueue) {
   }
 }
 
-function temporalQueueOperations(conn, messageReceiverQueue, dataReceiverQueue) {
+function temporalQueueOperations(
+  conn,
+  messageReceiverQueue,
+  dataReceiverQueue
+) {
   var ok = conn.createChannel(on_open);
   function on_open(err, ch) {
     createNewQueue(conn, dataReceiverQueue);
@@ -81,15 +87,29 @@ function temporalQueueOperations(conn, messageReceiverQueue, dataReceiverQueue) 
       );
       // Enviamos la información a la cola indicada.
       if (dataReceiverQueue === qSongsReceiver) {
-        ch.sendToQueue(messageReceiverQueue, new Buffer("hC7jHb" + "," + dataReceiverQueue), {
-          replyTo: q.queue
-        });
-        console.log("Message Receiver Queue -> " + q.queue, "Songs Receiver Queue -> " + dataReceiverQueue);
+        ch.sendToQueue(
+          messageReceiverQueue,
+          new Buffer("66Q5W6" + "," + dataReceiverQueue),
+          {
+            replyTo: q.queue
+          }
+        );
+        console.log(
+          "Message Receiver Queue -> " + q.queue,
+          "Songs Receiver Queue -> " + dataReceiverQueue
+        );
       } else {
-        // ch.sendToQueue(messageReceiverQueue, new Buffer("Wlxchu" + "," + songsObj.tittle), {
-        //   replyTo: q.queue
-        // });
-        // console.log("Message Receiver Queue -> " + q.queue, "Song Voted -> " + songsObj.tittle);
+        ch.sendToQueue(
+          messageReceiverQueue,
+          new Buffer("66Q5W6" + "," + "Mio Cid"),
+          {
+            replyTo: q.queue
+          }
+        );
+        console.log(
+          "Message Receiver Queue -> " + q.queue,
+          "Song Voted -> " + "Mio Cid"
+        );
       }
       // Consumimos los datos recibidos para administrarlos.
       ch.consume(q.queue, function(msg) {
@@ -112,19 +132,28 @@ function temporalQueueOperations(conn, messageReceiverQueue, dataReceiverQueue) 
             var song2 = JSON.parse(msg[1]);
             var song3 = JSON.parse(msg[2]);
             //console.log(msg);
-            console.log(song1[Object.keys(song1)[0]].genre);
+            // Agregamos los datos de las canciones a una lista
+            songsList[0] = song1[Object.keys(song1)[0]];
+            songsList[1] = song2[Object.keys(song2)[0]];
+            songsList[2] = song3[Object.keys(song3)[0]];
+
+            songsObj = Object.keys(song1)[0];
+            console.log(Object.keys(song1)[0]);
             // console.log(Object.keys(song2)[0]);
             // console.log(Object.keys(song3)[0]);
           } else {
             console.log("Troubles receiving the songs...");
           }
         });
-      }else {
-
+      } else {
       }
     });
     //temporalQueueOperations(conn, q_votos, qVotesReceiver);
   }
+}
+
+function cargarDetalles() {
+  document.getElementById("Detalle1").innerHTML = songsList[0].title;
 }
 
 amqp.connect(
@@ -136,5 +165,10 @@ amqp.connect(
     //persistentQueueOperations(conn, q_votos);
     // Recibimos la respuesta del servidor por medio de las colas temporales.
     temporalQueueOperations(conn, q_conexion, qSongsReceiver);
+    /*var delayInMilliseconds = 1000; //1 second
+
+    setTimeout(function() {
+      temporalQueueOperations(conn, q_votos, qVotesReceiver);
+    }, delayInMilliseconds);*/
   }
 );
